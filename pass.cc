@@ -6,8 +6,14 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Passes/PassBuilder.h"
-#include "llvm/Passes/PassPlugin.h"
 #include <iostream>
+
+#ifdef __linux__
+#include "llvm/Passes/PassPlugin.h"
+#elif defined(__APPLE__) && defined(__aarch64__)
+#include "llvm/Plugins/PassPlugin.h"
+#endif
+
 using namespace llvm;
 using namespace std;
 
@@ -131,16 +137,47 @@ GlobalVariable *buildPCTable(Function &F) {
     return PCTable;
 }
 
+vector<string> skipFunctions = {
+    "__runtime",
+    "pctable",
+    "PCTableEntry",
+    "__untracer",
+    "malloc",
+    "realloc",
+    "calloc"
+    "HASH_FIND",
+    "HASH_ADD",
+    "sysconf",
+    "sscanf",
+    "mprotect",
+    "printf",
+    "fopen",
+    "fclose",
+    "sigemptyset",
+    "sigaction",
+    "fgets",
+    "sscanf",
+    "sizeof",
+};
+
+bool foundInSkipFunctions(StringRef &fName) {
+    for (auto func : skipFunctions) {
+        if (fName.contains(func)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // -------------------------------------------------------
 // New Pass Manager version (for use with clang -fpass-plugin)
 // -------------------------------------------------------
 struct PCTablePassNPM : public PassInfoMixin<PCTablePassNPM> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &MAM) {
         bool Changed = false;
-
         for (Function &F : M) {
             StringRef fName = F.getName();
-            if (fName.contains("__runtime") || fName.contains("pctable") || fName.contains("PCTableEntry"))
+            if (fName == "main" || foundInSkipFunctions(fName))
             {
                 cout << "skipping function name" << " " << fName.str() << endl;
                 continue;

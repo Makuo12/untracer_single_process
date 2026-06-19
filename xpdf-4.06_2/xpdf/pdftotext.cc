@@ -132,16 +132,10 @@ static ArgDesc argDesc[] = {
 };
 
 extern "C" void __runtime_dump_pctables();
-extern "C" void *__runtime_get_block_addr(int funcIdx, int blockIdx);
-extern "C" int __runtime_num_functions();
-extern "C" int __runtime_num_blocks(int funcIdx);
 
 int main(int argc, char *argv[]) {
 
-  printf("Registered functions: %d\n", __runtime_num_functions());
   __runtime_dump_pctables();
-  void *block0 = __runtime_get_block_addr(0, 0);
-  printf("Table says block 0 is at: %p\n", block0);
 #if USE_EXCEPTIONS
   try {
 #endif

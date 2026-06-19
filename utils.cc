@@ -70,6 +70,7 @@ int modify_binary() {
             oracle_file.read(&original, 1);
             oracle_file.seekp(addr, std::ios::beg);
             oracle_file.write((char *)flag, 1);
+            // value(0x400000+offsetUL), addr(value-0x400000UL),original(char),block_index(int)
             text_file << std::hex << value << "," << std::hex << addr << "," << original << "," << std::dec << block_index++ << endl;
         }
     }
