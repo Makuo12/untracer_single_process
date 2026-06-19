@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -61,7 +62,7 @@ void __untracer_sigtrap_handler(int sig, siginfo_t *info, void *ctx) {
     uintptr_t rip = uc->uc_mcontext->__ss.__pc;
 #endif
     uintptr_t addr = rip - 1;
-
+    fprintf(stderr, "TRAP at RIP=0x%lx addr=0x%lx\n", rip, addr); // ← add this
     map * found = __untracer_find_breakpoint(hash_map, addr);
     if (found == NULL) {
         fprintf(stderr, "could not find breakpoint at: %ld\n", addr);
@@ -114,7 +115,7 @@ int __untracer_read_csv(const char * csv) {
     size_t block_index;
     while (fgets(line, sizeof(line), fp))
     {
-        if (sscanf(line, "0x%lx,0x%lx,%c,%zu", &addr_value, &addr_offset, &original, &block_index) != 4)
+        if (sscanf(line, "%lx,%lx,%c,%zu", &addr_value, &addr_offset, &original, &block_index) != 4)
             continue;
         breakpoint bp = {
             .addr_value = addr_value,

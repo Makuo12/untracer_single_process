@@ -40,7 +40,7 @@ wllvm -c -g -o $wrap/runtime.o $wrap/runtime.c
 
 
 if [ "$1" = "linux" ]; then
-usr/lib/llvm-20/bin/clang++ $wrap/pass.cc \
+/usr/lib/llvm-20/bin/clang++ $wrap/pass.cc \
     -I /usr/include/llvm-20 \
     -I /usr/include/llvm-c-20 \
     -shared \
@@ -56,7 +56,7 @@ rm -rf build
 mkdir -p build 
 cd build
 
-COVERAGE_FLAGS="-g -fno-pie"
+COVERAGE_FLAGS="-I $wrap/include -g -fno-pie"
 
 cmake -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_C_COMPILER=wllvm \
@@ -99,7 +99,7 @@ cd build
 
 
 # 1. Define the coverage flags we want applied to EVERY source file
-COVERAGE_FLAGS="-g"
+COVERAGE_FLAGS="I ./include -g"
 
 cmake -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_C_COMPILER=wllvm \
