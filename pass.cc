@@ -6,7 +6,7 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Passes/PassBuilder.h"
-#include "llvm/Plugins/PassPlugin.h"
+#include "llvm/Passes/PassPlugin.h"
 #include <iostream>
 using namespace llvm;
 using namespace std;
@@ -140,7 +140,7 @@ struct PCTablePassNPM : public PassInfoMixin<PCTablePassNPM> {
 
         for (Function &F : M) {
             StringRef fName = F.getName();
-            if (fName.contains("__runtime") || fName.contains("pctable"))
+            if (fName.contains("__runtime") || fName.contains("pctable") || fName.contains("PCTableEntry"))
             {
                 cout << "skipping function name" << " " << fName.str() << endl;
                 continue;

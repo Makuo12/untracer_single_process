@@ -3,6 +3,7 @@
 *.so 
 *.ll        
 utils
+*.csv
 *.bc
 *.bin
 test_bin
