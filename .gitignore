@@ -1,0 +1,11 @@
+*.dSYM
+.vscode
+*.so 
+*.ll        
+utils
+*.bc
+*.bin
+test_bin
+xpdf-4.06_2/build
+*.o
+.bblist
