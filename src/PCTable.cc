@@ -1,27 +1,33 @@
-#include "llvm/IR/PassManager.h"
-#include "llvm/IR/Module.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/Constants.h"
-#include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/Type.h"
-#include "llvm/Passes/PassBuilder.h"
-#include <iostream>
-
-#ifdef __linux__
-#include "llvm/Passes/PassPlugin.h"
-#elif defined(__APPLE__) && defined(__aarch64__)
-#include "llvm/Plugins/PassPlugin.h"
-#endif
+#include "PCTablePass.h"
 
 using namespace llvm;
 using namespace std;
 
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/Transforms/Utils/ModuleUtils.h" // appendToGlobalCtors
+std::vector<std::string> skipFunctions = {
+    "__runtime",
+    "pctable",
+    "PCTableEntry",
+    "__untracer",
+    "malloc",
+    "realloc",
+    "calloc"
+    "HASH_FIND",
+    "HASH_ADD",
+    "sysconf",
+    "sscanf",
+    "mprotect",
+    "printf",
+    "fopen",
+    "fclose",
+    "sigemptyset",
+    "sigaction",
+    "fgets",
+    "sscanf",
+    "sizeof",
+};
 
 // Step 2 — emit a constructor that registers the PC table with the runtime
-void emitRegistrationCtor(llvm::Module &M, llvm::GlobalVariable *PCTable, llvm::Function &F)
+void PCTablePass::emitRegistrationCtor(llvm::Module &M, llvm::GlobalVariable *PCTable, llvm::Function &F)
 {
     LLVMContext &Ctx = M.getContext();
     Type *VoidTy = Type::getVoidTy(Ctx);
@@ -84,7 +90,7 @@ void emitRegistrationCtor(llvm::Module &M, llvm::GlobalVariable *PCTable, llvm::
 
 // Builds the PC table for a single function
 // Returns the created global, or nullptr if function has no blocks
-GlobalVariable *buildPCTable(Function &F) {
+GlobalVariable * PCTablePass::buildPCTable(Function &F) {
     // Skip declarations — no body to build a table from
     if (F.isDeclaration())
         return nullptr;
@@ -137,30 +143,8 @@ GlobalVariable *buildPCTable(Function &F) {
     return PCTable;
 }
 
-vector<string> skipFunctions = {
-    "__runtime",
-    "pctable",
-    "PCTableEntry",
-    "__untracer",
-    "malloc",
-    "realloc",
-    "calloc"
-    "HASH_FIND",
-    "HASH_ADD",
-    "sysconf",
-    "sscanf",
-    "mprotect",
-    "printf",
-    "fopen",
-    "fclose",
-    "sigemptyset",
-    "sigaction",
-    "fgets",
-    "sscanf",
-    "sizeof",
-};
 
-bool foundInSkipFunctions(StringRef &fName) {
+bool PCTablePass::foundInSkipFunctions(StringRef &fName) {
     for (auto func : skipFunctions) {
         if (fName.contains(func)) {
             return true;
@@ -169,61 +153,33 @@ bool foundInSkipFunctions(StringRef &fName) {
     return false;
 }
 
-// -------------------------------------------------------
-// New Pass Manager version (for use with clang -fpass-plugin)
-// -------------------------------------------------------
-struct PCTablePassNPM : public PassInfoMixin<PCTablePassNPM> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &MAM) {
-        bool Changed = false;
-        for (Function &F : M) {
-            StringRef fName = F.getName();
-            if (fName == "main" || foundInSkipFunctions(fName))
-            {
-                cout << "skipping function name" << " " << fName.str() << endl;
-                continue;
-            }
-            GlobalVariable *Table = buildPCTable(F);
-            if (!Table)
-                continue;
-            // Step 2 — emit the registration constructor
-            emitRegistrationCtor(M, Table, F);
-            
-            // errs() << "[PCTablePass] Built table for: " << F.getName()
-            //        << " with " << F.size() << " blocks"
-            //        << " → " << Table->getName() << "\n";
-
-            Changed = true;
+PreservedAnalyses PCTablePass::run(Module &M, ModuleAnalysisManager &MAM)
+{
+    bool Changed = false;
+    for (Function &F : M)
+    {
+        StringRef fName = F.getName();
+        if (fName == "main" || foundInSkipFunctions(fName))
+        {
+            cout << "skipping function name" << " " << fName.str() << endl;
+            continue;
         }
+        GlobalVariable *Table = buildPCTable(F);
+        if (!Table)
+            continue;
+        // Step 2 — emit the registration constructor
+        emitRegistrationCtor(M, Table, F);
 
-        // We only added globals — function bodies are untouched
-        // so we preserve all existing analyses
-        return Changed
-            ? PreservedAnalyses::none()
-            : PreservedAnalyses::all();
+        // errs() << "[PCTablePass] Built table for: " << F.getName()
+        //        << " with " << F.size() << " blocks"
+        //        << " → " << Table->getName() << "\n";
+
+        Changed = true;
     }
-};
 
-// -------------------------------------------------------
-// Plugin registration (for -fpass-plugin=pass.so)
-// -------------------------------------------------------
-extern "C" LLVM_ATTRIBUTE_WEAK
-::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() {
-    return {
-        LLVM_PLUGIN_API_VERSION,
-        "PCTablePass",
-        LLVM_VERSION_STRING,
-        [](PassBuilder &PB) {
-            // Register by name so opt can find it
-            PB.registerPipelineParsingCallback(
-                [](StringRef Name, ModulePassManager &MPM,
-                    ArrayRef<PassBuilder::PipelineElement>) {
-                    if (Name == "pctable") {
-                        MPM.addPass(PCTablePassNPM());
-                        return true;
-                    }
-                    return false;
-                }
-            );
-        }
-    };
+    // We only added globals — function bodies are untouched
+    // so we preserve all existing analyses
+    return Changed
+               ? PreservedAnalyses::none()
+               : PreservedAnalyses::all();
 }

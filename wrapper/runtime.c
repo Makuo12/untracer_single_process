@@ -2,8 +2,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-
-
 typedef struct
 {
     void **start;
@@ -43,7 +41,7 @@ void __runtime_register_pctable(void **start, void **end)
     ++current_entry;
 }
 
-void __runtime_dump_pctables()
+void __runtime_dump_pctables(void)
 {
     FILE * fp = fopen(".bblist", "w");
     if (fp == NULL) {

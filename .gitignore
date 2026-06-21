@@ -4,6 +4,7 @@
 *.ll        
 utils
 *.csv
+output
 *.bc
 *.bin
 test_bin

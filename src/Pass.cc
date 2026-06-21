@@ -1,0 +1,36 @@
+#include "common.h"
+#include "ExitPass.h"
+#include "FilePass.h"
+#include "GlobalPass.h"
+#include "HeapPass.h"
+#include "PCTablePass.h"
+#include "RenameMain.h"
+using namespace llvm;
+
+extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo()
+{
+    return {
+        LLVM_PLUGIN_API_VERSION,
+        "UntracerPass",
+        LLVM_VERSION_STRING,
+        [](PassBuilder &PB) {
+            // Register by name so opt can find it
+            PB.registerPipelineParsingCallback(
+                [](StringRef Name, ModulePassManager &MPM,
+                   ArrayRef<PassBuilder::PipelineElement>)
+                {
+                    if (Name == "pctable")
+                    {
+                        MPM.addPass(RenameMainPass());
+                        MPM.addPass(HeapResetPass());
+                        MPM.addPass(ExitHookPass());
+                        MPM.addPass(CloneGlobalsPass());
+                        MPM.addPass(FileHookPass());
+                        MPM.addPass(PCTablePass());
+                        return true;
+                    }
+                    return false;
+                });
+        }
+    };
+}
