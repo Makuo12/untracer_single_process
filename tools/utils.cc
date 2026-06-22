@@ -1,6 +1,7 @@
 #include <fstream>
 #include <string>
 #include <iostream>
+#include <unordered_set>
 
 #include <cstring>
 #include <cstdlib>
@@ -34,46 +35,63 @@ int copy_binary() {
     return 0;
 }
 
-int modify_binary() {
-    const char * oracle = "oracle.bin";
-    const char * bblist = ".bblist";
-    const char * text = "text.csv";
+
+int modify_binary()
+{
+    const char *oracle = "oracle.bin";
+    const char *bblist = ".bblist";
+    const char *text = "text.csv";
     char buf[3000];
     unsigned char flag[] = {0xCC};
+
     ifstream bblist_file(bblist, std::ios::binary);
-    if (!bblist_file.is_open()) {
+    if (!bblist_file.is_open())
+    {
         cout << "failed to open bblist file" << endl;
         return -1;
     }
+
     ofstream text_file(text, std::ios::binary);
-    if (!text_file.is_open()) {
+    if (!text_file.is_open())
+    {
         cout << "failed to open text file" << endl;
         return -1;
     }
+
     fstream oracle_file(oracle, std::ios::in | std::ios::out | std::ios::binary);
-    if (!oracle_file.is_open()) {
+    if (!oracle_file.is_open())
+    {
         cout << "failed to open oracle file" << endl;
         return -1;
     }
 
+    std::unordered_set<unsigned long long> seen; // ← track written addresses
     int block_index = 0;
+
     while (bblist_file.getline(buf, 3000))
     {
-        // buf contains the line
         char *c;
         if ((c = strstr(buf, "0x")) != NULL)
-        {                              // ← find "0x" first
-            unsigned long long value = std::strtoll(c, NULL, 16); // then parse from there
+        {
+            unsigned long long value = std::strtoll(c, NULL, 16);
+
+            if (seen.count(value))
+                continue; // ← skip duplicate address
+            seen.insert(value);
+
             auto addr = value - 0x400000;
             oracle_file.seekg(addr, std::ios::beg);
             char original;
             oracle_file.read(&original, 1);
+
             oracle_file.seekp(addr, std::ios::beg);
             oracle_file.write((char *)flag, 1);
-            // value(0x400000+offsetUL), addr(value-0x400000UL),original(char),block_index(int)
-            text_file << std::hex << value << "," << std::hex << addr << "," << original << "," << std::dec << block_index++ << endl;
+
+            text_file << std::hex << value << "," << std::hex << addr << ","
+                      << original << "," << std::dec << block_index++ << endl;
         }
     }
+
     oracle_file.close();
     text_file.close();
     bblist_file.close();

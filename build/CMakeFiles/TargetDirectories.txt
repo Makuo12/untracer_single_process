@@ -1,8 +1,0 @@
-/Users/mac/Documents/forte_research/llvm_test/build/CMakeFiles/intrinsics_gen.dir
-/Users/mac/Documents/forte_research/llvm_test/build/CMakeFiles/vt_gen.dir
-/Users/mac/Documents/forte_research/llvm_test/build/CMakeFiles/omp_gen.dir
-/Users/mac/Documents/forte_research/llvm_test/build/CMakeFiles/acc_gen.dir
-/Users/mac/Documents/forte_research/llvm_test/build/CMakeFiles/target_parser_gen.dir
-/Users/mac/Documents/forte_research/llvm_test/build/CMakeFiles/Untracer.dir
-/Users/mac/Documents/forte_research/llvm_test/build/CMakeFiles/edit_cache.dir
-/Users/mac/Documents/forte_research/llvm_test/build/CMakeFiles/rebuild_cache.dir

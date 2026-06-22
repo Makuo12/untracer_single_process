@@ -14,10 +14,13 @@ void CloneGlobalsPass::cloneGlobals(Module &M)
 
     for (auto &Global : M.globals())
     {
-
         if (Global.hasSection() == false && Global.isConstant() == false)
         {
+            #ifdef __linux__
+            Global.setSection("__cls_glob");
+            #elif defined(__APPLE__) && defined(__aarch64__)
             Global.setSection("DATA,__cls_glob");
+            #endif
         }
     }
 }

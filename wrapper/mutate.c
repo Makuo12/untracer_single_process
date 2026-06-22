@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -93,15 +95,6 @@ void __untracer_mutate(u8 *mem, int position)
     mem[position >> 3] ^= (128 >> (position & 7));
 }
 
-static void generateTimestampFilename(char *buffer)
-{
-    time_t now = time(NULL);
-    struct tm *localTime = localtime(&now);
-
-    size_t size = strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M%S", localTime);
-    buffer[size] = '\0';
-    return;
-}
 
 static void add_file(Entry * all_entries, int * capacity, size_t* entry_count, const char *filename, const char *file_path, size_t size)
 {
@@ -136,11 +129,20 @@ static void add_file(Entry * all_entries, int * capacity, size_t* entry_count, c
     (*entry_count)++;
 }
 
+
+static void generateTimestampFilename(char *buffer, size_t buf_size)
+{
+    time_t now = time(NULL);
+    struct tm *localTime = localtime(&now);
+    size_t size = strftime(buffer, buf_size, "%Y%m%d_%H%M%S", localTime);
+    buffer[size] = '\0';
+}
+
 void __untracer_write_to_file(Entry *all_entries, int *capacity, size_t *entry_count,
                               const char *input, size_t file_size, Result result)
 {
     char timestamp[1024];
-    generateTimestampFilename(timestamp);
+    generateTimestampFilename(timestamp, sizeof(timestamp)); // ← pass size
     char buf[1024];
     switch (result)
     {
@@ -149,6 +151,7 @@ void __untracer_write_to_file(Entry *all_entries, int *capacity, size_t *entry_c
         size_t size = snprintf(NULL, 0, "%s/%s", crash_dir, timestamp);
         snprintf(buf, size + 1, "%s/%s", crash_dir, timestamp);
         copy_binary(input, buf);
+        break; // ← was missing
     }
     case TRAP:
     {
@@ -156,6 +159,7 @@ void __untracer_write_to_file(Entry *all_entries, int *capacity, size_t *entry_c
         snprintf(buf, size + 1, "%s/%s", trace_dir, timestamp);
         copy_binary(input, buf);
         add_file(all_entries, capacity, entry_count, timestamp, buf, file_size);
+        break;
     }
     }
 }
