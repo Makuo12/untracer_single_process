@@ -248,23 +248,23 @@ void __untracer_files(Entry **entries, int *capacity, const char *in_dir, size_t
 void __untracer_setup_std_outputs(void)
 {
     std_out_ref = dup(STDOUT_FILENO);
-    if (std_out_ref == -1)
-        perror("dup stdout");
-
     std_err_ref = dup(STDERR_FILENO);
-    if (std_err_ref == -1)
-        perror("dup stderr");
+    if (std_out_ref == -1 || std_err_ref == -1)
+        perror("dup");
 }
 
 void __untracer_suppress_output(void)
 {
     if (std_out_ref == -1 || std_err_ref == -1)
-        return; // setup never succeeded
+        return;
+
+    fflush(stdout);
+    fflush(stderr);
 
     int dev_null = open("/dev/null", O_WRONLY);
     if (dev_null == -1)
     {
-        perror("Failed to open /dev/null");
+        perror("open");
         return;
     }
     dup2(dev_null, STDOUT_FILENO);

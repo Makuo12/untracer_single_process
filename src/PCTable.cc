@@ -59,6 +59,7 @@ void PCTablePass::emitRegistrationCtor(llvm::Module &M, llvm::GlobalVariable *PC
     IRBuilder<> IRB(Entry);
 
     // Get pointer to first element — start of table
+    // GEP means (GetElementPointer)
     Value *Start = IRB.CreateConstGEP2_32(
         PCTable->getValueType(),
         PCTable,
@@ -80,11 +81,9 @@ void PCTablePass::emitRegistrationCtor(llvm::Module &M, llvm::GlobalVariable *PC
     IRB.CreateCall(RegFn, {Start, End});
     IRB.CreateRetVoid();
 
-    // -------------------------------------------------------
-    // Register as a global constructor
-    // Runs after relocations are patched, before main()
-    // Priority 65535 = runs last among ctors (after C++ global ctors)
-    // -------------------------------------------------------
+    // Adds Ctor to the llvm global constructor table. Each entry in the table is a struct of 3 fields
+    // struct { priority(65535), pointer to function (Ctor), associated data(in our case null) }
+    // Priority is from 0 to 65535
     appendToGlobalCtors(M, Ctor, /*Priority=*/65535);
 }
 

@@ -1,3 +1,6 @@
+#! /bin/bash
+set -e
+
 export LLVM_COMPILER=clang
 export LLVM_CC_NAME=clang-20        # ← pin to version 20
 export LLVM_CXX_NAME=clang++-20     # ← pin to version 20

@@ -162,7 +162,7 @@ void __untracer_setup_stat(const char * file) {
 }
 
 void __untracer_write_to_stat(const char * file, int past_time, time_t current_time) {
-    FILE * fp = fopen(file, "w");
+    FILE * fp = fopen(file, "r");
     if (fp == NULL) {
         perror("stat file could not open");
         return;
@@ -200,6 +200,7 @@ int main(int argc, char **argv)
                 break;
         }
     }
+    __untracer_setup_std_outputs();
     __untracer_signals();
     __untracer_read_csv(csv);
     __untracer_setup_global();
@@ -220,7 +221,7 @@ int main(int argc, char **argv)
             size_t previous = current - 1;
             if (previous > 0 && previous < entry_count) {
                 Entry * entry = &all_entries[previous];
-                __untracer_write_to_file(all_entries, &capacity, &entry_count, input, entry->st_size, CRASH);
+                // __untracer_write_to_file(all_entries, &capacity, &entry_count, input, entry->st_size, CRASH);
             }
             continue;
         }
@@ -243,12 +244,14 @@ int main(int argc, char **argv)
                 has_coverage = 0;
                 __untracer_mutate(mem, i);
                 __untracer_write_testcase(mem, entry, input);
+                __untracer_suppress_output();
                 target_main(2, new_args);
+                __untracer_restore_output();
                 __untracer_mutate(mem, i);
                 if (has_coverage) {
                     entry->trace_count += has_coverage;
                     entry->path_found += 1;
-                    __untracer_write_to_file(all_entries, &capacity, &entry_count, input, entry->st_size, TRAP);
+                    // __untracer_write_to_file(all_entries, &capacity, &entry_count, input, entry->st_size, TRAP);
                 }
                 entry->single_pass += 1;
             }
@@ -258,7 +261,7 @@ int main(int argc, char **argv)
         free_ptrs();
         __untracer_restore_global();
         time_t current_time = time(NULL);
-        int hours_elapsed = (int)difftime(current_time, start_time) / 3600;
+        int hours_elapsed = (int)difftime(current_time, start_time) / 360;
         if (hours_elapsed > last_processed_hour) {
             last_processed_hour += 1;
             __untracer_write_to_stat(stats, hours_elapsed, current_time);
