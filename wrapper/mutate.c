@@ -15,8 +15,9 @@ static char *crash_dir = NULL;
 static char *trace_dir = NULL;
 static int std_out_ref = -1;
 static int std_err_ref = -1;
+// FIX #2: open /dev/null once instead of on every suppress call
+static int dev_null_fd = -1;
 size_t number_execs = 0;
-
 
 void __untracer_setup_dir(const char *output)
 {
@@ -95,8 +96,7 @@ void __untracer_mutate(u8 *mem, int position)
     mem[position >> 3] ^= (128 >> (position & 7));
 }
 
-
-static void add_file(Entry * all_entries, int * capacity, size_t* entry_count, const char *filename, const char *file_path, size_t size)
+static void add_file(Entry *all_entries, int *capacity, size_t *entry_count, const char *filename, const char *file_path, size_t size)
 {
     if (filename == NULL || file_path == NULL)
     {
@@ -129,7 +129,6 @@ static void add_file(Entry * all_entries, int * capacity, size_t* entry_count, c
     (*entry_count)++;
 }
 
-
 static void generateTimestampFilename(char *buffer, size_t buf_size)
 {
     time_t now = time(NULL);
@@ -142,7 +141,7 @@ void __untracer_write_to_file(Entry *all_entries, int *capacity, size_t *entry_c
                               const char *input, size_t file_size, Result result)
 {
     char timestamp[1024];
-    generateTimestampFilename(timestamp, sizeof(timestamp)); // ← pass size
+    generateTimestampFilename(timestamp, sizeof(timestamp));
     char buf[1024];
     switch (result)
     {
@@ -151,7 +150,7 @@ void __untracer_write_to_file(Entry *all_entries, int *capacity, size_t *entry_c
         size_t size = snprintf(NULL, 0, "%s/%s", crash_dir, timestamp);
         snprintf(buf, size + 1, "%s/%s", crash_dir, timestamp);
         copy_binary(input, buf);
-        break; // ← was missing
+        break;
     }
     case TRAP:
     {
@@ -202,16 +201,16 @@ void __untracer_files(Entry **entries, int *capacity, const char *in_dir, size_t
 
         if (strstr(file_path, ".pdf") == NULL)
         {
-            free(items[i]); /* also free here, was leaking on pdf filter skip */
+            free(items[i]);
             continue;
         }
 
         if (stat(file_path, &st) == 0)
         {
-            if (*entry_count >= (size_t)*capacity) /* was: (size_t)capacity — missing * */
+            if (*entry_count >= (size_t)*capacity)
             {
-                *capacity *= 2;                                                      /* was: capacity *= 2 — missing * */
-                Entry *temp = (Entry *)realloc(*entries, *capacity * sizeof(Entry)); /* was: capacity — missing * */
+                *capacity *= 2;
+                Entry *temp = (Entry *)realloc(*entries, *capacity * sizeof(Entry));
                 if (temp == NULL)
                 {
                     fprintf(stderr, "Memory reallocation failed while scanning entries");
@@ -244,32 +243,30 @@ void __untracer_files(Entry **entries, int *capacity, const char *in_dir, size_t
     }
 }
 
-
 void __untracer_setup_std_outputs(void)
 {
     std_out_ref = dup(STDOUT_FILENO);
     std_err_ref = dup(STDERR_FILENO);
     if (std_out_ref == -1 || std_err_ref == -1)
         perror("dup");
+
+    // FIX #2: open /dev/null once here, reuse in suppress/restore
+    dev_null_fd = open("/dev/null", O_WRONLY);
+    if (dev_null_fd == -1)
+        perror("open /dev/null");
 }
 
 void __untracer_suppress_output(void)
 {
-    if (std_out_ref == -1 || std_err_ref == -1)
+    if (std_out_ref == -1 || std_err_ref == -1 || dev_null_fd == -1)
         return;
 
     fflush(stdout);
     fflush(stderr);
 
-    int dev_null = open("/dev/null", O_WRONLY);
-    if (dev_null == -1)
-    {
-        perror("open");
-        return;
-    }
-    dup2(dev_null, STDOUT_FILENO);
-    dup2(dev_null, STDERR_FILENO);
-    close(dev_null);
+    // FIX #2: reuse the single persistent fd instead of open()/close() every call
+    dup2(dev_null_fd, STDOUT_FILENO);
+    dup2(dev_null_fd, STDERR_FILENO);
 }
 
 void __untracer_restore_output(void)
@@ -293,7 +290,14 @@ void __untracer_teardown_std_outputs(void)
         close(std_err_ref);
         std_err_ref = -1;
     }
+    // FIX #2: close the persistent dev_null fd on teardown
+    if (dev_null_fd != -1)
+    {
+        close(dev_null_fd);
+        dev_null_fd = -1;
+    }
 }
+
 void __untracer_write_testcase(u8 *mem, Entry *entry, const char *input_file)
 {
     FILE *f = fopen(input_file, "wb");
@@ -304,8 +308,6 @@ void __untracer_write_testcase(u8 *mem, Entry *entry, const char *input_file)
     }
     fwrite(mem, 1, entry->st_size, f);
     fclose(f);
-
-
 }
 
 u8 *__untracer_read_file(Entry *entry)

@@ -162,7 +162,7 @@ void __untracer_setup_stat(const char * file) {
 }
 
 void __untracer_write_to_stat(const char * file, int past_time, time_t current_time) {
-    FILE * fp = fopen(file, "r");
+    FILE * fp = fopen(file, "a");
     if (fp == NULL) {
         perror("stat file could not open");
         return;
@@ -174,7 +174,7 @@ void __untracer_write_to_stat(const char * file, int past_time, time_t current_t
     char buf[1024];
     struct tm *tm_info = localtime(&current_time);
     strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", tm_info);
-    fprintf(fp, "%dhrs,%s,%lu,%d", past_time, buf, total_exec, coverage);
+    fprintf(fp, "%dmins,%s,%llu,%d\n", past_time, buf, total_exec, coverage);
     fclose(fp);
 }
 
@@ -210,61 +210,86 @@ int main(int argc, char **argv)
     memset(virgin_blocks, 0, MAP_SIZE);
     size_t current = 0;
     time_t start_time = time(NULL);
-    int last_processed_hour = 1;
+    int last_processed_interval = 0;
     char * new_args[3] = {(char *)argv[0], (char *)input, NULL};
+    static u8 *current_mem = NULL;
+    static size_t current_mem_size = 0;
     while (1)
     {
         int sig_result = sigsetjmp(env, 1);
         if (sig_result > 0)
         {
-            // crash_handle it here
-            size_t previous = current - 1;
-            if (previous > 0 && previous < entry_count) {
-                Entry * entry = &all_entries[previous];
-                // __untracer_write_to_file(all_entries, &capacity, &entry_count, input, entry->st_size, CRASH);
+            if (current_mem != NULL)
+            {
+                munmap(current_mem, current_mem_size);
+                current_mem = NULL;
+            }
+            // FIX #4: guard against size_t underflow when current == 0
+            if (current > 0)
+            {
+                size_t previous = current - 1;
+                if (previous < entry_count)
+                {
+                    Entry *entry = &all_entries[previous];
+                    // __untracer_write_to_file(all_entries, &capacity, &entry_count, input, entry->st_size, CRASH);
+                }
             }
             continue;
         }
         else
         {
+            // FIX #3: wrap current index to avoid walking off the array
+            if (current >= entry_count)
+            {
+                current = 0;
+            }
+
             Entry *entry = &all_entries[current++];
             if (entry->has_issues)
             {
                 continue;
             }
-            u8 *mem = __untracer_read_file(entry);
-            if (mem == NULL)
+            u8 *current_mem = __untracer_read_file(entry);
+            current_mem_size = entry->st_size;
+            if (current_mem == NULL)
             {
                 entry->has_issues = 1;
                 continue;
             }
             size_t len = entry->st_size << 3;
-            for (size_t i = 0; i < len; ++i) {
+            for (size_t i = 0; i < len; ++i)
+            {
                 ++total_exec;
                 has_coverage = 0;
-                __untracer_mutate(mem, i);
-                __untracer_write_testcase(mem, entry, input);
+                __untracer_mutate(current_mem, i);
+                __untracer_write_testcase(current_mem, entry, input);
                 __untracer_suppress_output();
                 target_main(2, new_args);
                 __untracer_restore_output();
-                __untracer_mutate(mem, i);
-                if (has_coverage) {
+                __untracer_mutate(current_mem, i); // undo mutation
+                if (has_coverage)
+                {
                     entry->trace_count += has_coverage;
                     entry->path_found += 1;
                     // __untracer_write_to_file(all_entries, &capacity, &entry_count, input, entry->st_size, TRAP);
                 }
                 entry->single_pass += 1;
+                time_t current_time = time(NULL);
+                int intervals_elapsed = (int)difftime(current_time, start_time) / 1200;
+                if (intervals_elapsed > last_processed_interval)
+                {
+                    last_processed_interval += 1;
+                    __untracer_write_to_stat(stats, intervals_elapsed, current_time);
+                }
             }
             entry->full_pass += 1;
+
+            // FIX #1: release the mmap'd buffer after we're done with this entry
+            munmap(current_mem, entry->st_size);
+            current_mem = NULL;
         }
         close_open_file_handles();
         free_ptrs();
         __untracer_restore_global();
-        time_t current_time = time(NULL);
-        int hours_elapsed = (int)difftime(current_time, start_time) / 360;
-        if (hours_elapsed > last_processed_hour) {
-            last_processed_hour += 1;
-            __untracer_write_to_stat(stats, hours_elapsed, current_time);
-        }
     }
 }
